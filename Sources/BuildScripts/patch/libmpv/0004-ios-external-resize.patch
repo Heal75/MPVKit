@@ -1,0 +1,43 @@
+--- forkSrcPrefix/options/options.h
++++ forkDstPrefix/options/options.h
+@@ -87,6 +87,16 @@
+     struct m_geometry android_surface_size;
+
+     struct m_geometry d3d11_composition_size;
++
++    // Write-only trigger: any write to this option (value ignored) tells the
++    // moltenvk ra_ctx to re-read the bound CAMetalLayer's drawableSize and
++    // resize its swapchain in place, via the same VOCTRL_EXTERNAL_RESIZE path
++    // android_surface_size/d3d11_composition_size already use. iOS has no
++    // native window backend to raise VO_EVENT_RESIZE on its own, so embedders
++    // need an explicit way to say "the surface size changed" without forcing
++    // a full video-chain reinit (which tears down and recreates the whole
++    // Vulkan device/instance) just to make mpv notice.
++    struct m_geometry moltenvk_surface_size;
+
+     int swapchain_depth;  // max number of images to render ahead
+
+--- forkSrcPrefix/options/options.c
++++ forkDstPrefix/options/options.c
+@@ -248,6 +248,9 @@
+ #if HAVE_D3D11
+     {"d3d11-composition-size", OPT_SIZE_BOX(d3d11_composition_size)},
+ #endif
++#if HAVE_MOLTENVK
++    {"moltenvk-surface-size", OPT_SIZE_BOX(moltenvk_surface_size)},
++#endif
+     {"swapchain-depth", OPT_INT(swapchain_depth), M_RANGE(1, VO_MAX_SWAPCHAIN_DEPTH)},
+     {"override-display-fps", OPT_REPLACED("display-fps-override")},
+     {0}
+--- forkSrcPrefix/player/command.c
++++ forkDstPrefix/player/command.c
+@@ -8017,7 +8017,8 @@
+             queue_seek(mpctx, MPSEEK_RELATIVE, 0.0, MPSEEK_EXACT, 0);
+     }
+
+-    if (opt_ptr == &opts->vo->android_surface_size || opt_ptr == &opts->vo->d3d11_composition_size) {
++    if (opt_ptr == &opts->vo->android_surface_size || opt_ptr == &opts->vo->d3d11_composition_size ||
++        opt_ptr == &opts->vo->moltenvk_surface_size) {
+         if (mpctx->video_out)
+             vo_control(mpctx->video_out, VOCTRL_EXTERNAL_RESIZE, NULL);
+     }
